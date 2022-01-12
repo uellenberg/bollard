@@ -24,9 +24,8 @@ ct_logs = ["ssl", "ct-logs"]
 
 [dependencies]
 base64 = "0.13"
-bollard-stubs = { version = "1.41.0" }
+bollard-stubs = { version = "1.41.0", path = "codegen/target/generated-sources" }
 bytes = "1"
-chrono = { version = "0.4", features = ["serde"] }
 ct-logs = { version = "0.9.0", optional = true }
 dirs-next = "2.0"
 futures-core = "0.3"
@@ -46,6 +45,7 @@ serde_json = "1.0"
 serde_urlencoded = "0.7"
 tokio = { version = "1.7", features = ["time", "fs", "net", "rt", "rt-multi-thread", "io-util"] }
 thiserror = "1.0"
+time = { version = "0.3", features = ["formatting", "parsing"] }
 tokio-util = { version = "0.6", features = ["codec"] }
 url = "2.2"
 webpki-roots = { version = "0.22", optional = true }

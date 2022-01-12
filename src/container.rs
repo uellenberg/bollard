@@ -1,11 +1,11 @@
 //! Container API: run docker containers and manage their lifecycle
 
-use chrono::{DateTime, Utc};
 use futures_core::Stream;
 use http::header::CONTENT_TYPE;
 use http::request::Builder;
 use hyper::{body::Bytes, Body, Method};
 use serde::Serialize;
+use time::OffsetDateTime;
 
 use std::cmp::Eq;
 use std::collections::HashMap;
@@ -658,8 +658,16 @@ pub struct StorageStats {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(missing_docs)]
 pub struct Stats {
-    pub read: DateTime<Utc>,
-    pub preread: DateTime<Utc>,
+    #[serde(
+        deserialize_with = "crate::docker::deserialize_rfc3339",
+        serialize_with = "crate::docker::serialize_rfc3339"
+    )]
+    pub read: OffsetDateTime,
+    #[serde(
+        deserialize_with = "crate::docker::deserialize_rfc3339",
+        serialize_with = "crate::docker::serialize_rfc3339"
+    )]
+    pub preread: OffsetDateTime,
     pub num_procs: u32,
     pub pids_stats: PidsStats,
     pub network: Option<NetworkStats>,
