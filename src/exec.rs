@@ -15,7 +15,7 @@ use crate::read::NewlineLogOutputDecoder;
 use futures_core::Stream;
 use std::fmt::{Debug, Formatter};
 use std::pin::Pin;
-use tokio::io::AsyncWrite;
+use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::FramedRead;
 
 /// Exec configuration used in the [Create Exec API](Docker::create_exec())
@@ -65,6 +65,8 @@ pub struct StartExecOptions {
     pub detach: bool,
     /// The maximum size for a line of output. The default is 8 * 1024 (roughly 1024 characters).
     pub output_capacity: Option<usize>,
+    /// Return the raw output AsyncRead instead of a stream split on newlines.
+    pub raw: bool,
 }
 
 /// Result type for the [Start Exec API](Docker::start_exec())
@@ -74,6 +76,10 @@ pub enum StartExecResults {
         output: Pin<Box<dyn Stream<Item = Result<LogOutput, Error>> + Send>>,
         input: Pin<Box<dyn AsyncWrite + Send>>,
     },
+    AttachedRaw {
+        output: Pin<Box<dyn AsyncRead + Send>>,
+        input: Pin<Box<dyn AsyncWrite + Send>>,
+    },
     Detached,
 }
 
@@ -81,6 +87,7 @@ impl Debug for StartExecResults {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             StartExecResults::Attached { .. } => write!(f, "StartExecResults::Attached"),
+            StartExecResults::AttachedRaw { .. } => write!(f, "StartExecResults::AttachedRaw"),
             StartExecResults::Detached => write!(f, "StartExecResults::Detached"),
         }
     }
@@ -209,14 +216,6 @@ impl Docker {
                 Ok(StartExecResults::Detached)
             }
             _ => {
-                let capacity = match config {
-                    Some(StartExecOptions {
-                        output_capacity: Some(capacity),
-                        ..
-                    }) => capacity,
-                    _ => 8 * 1024,
-                };
-
                 let req = self.build_request(
                     &url,
                     Builder::new()
@@ -233,11 +232,31 @@ impl Docker {
 
                 let (read, write) = self.process_upgraded(req).await?;
 
-                let log = FramedRead::with_capacity(read, NewlineLogOutputDecoder::new(), capacity);
-                Ok(StartExecResults::Attached {
-                    output: Box::pin(log),
-                    input: Box::pin(write),
-                })
+                match config {
+                    Some(StartExecOptions { raw: true, .. }) => Ok(StartExecResults::AttachedRaw {
+                        output: Box::pin(read),
+                        input: Box::pin(write),
+                    }),
+                    _ => {
+                        let capacity = match config {
+                            Some(StartExecOptions {
+                                output_capacity: Some(capacity),
+                                ..
+                            }) => capacity,
+                            _ => 8 * 1024,
+                        };
+
+                        let log = FramedRead::with_capacity(
+                            read,
+                            NewlineLogOutputDecoder::new(),
+                            capacity,
+                        );
+                        Ok(StartExecResults::Attached {
+                            output: Box::pin(log),
+                            input: Box::pin(write),
+                        })
+                    }
+                }
             }
         }
     }
